@@ -10,39 +10,38 @@
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-<style>
-  body {
-    background: #f7f7f9;
-  }
-
-  .card-preview {
-    width: 100%;
-    height: calc(100vh - 260px); /* ⭐高度加大間距，避免被按鈕壓到 */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  #card-img {
-    max-width: 100%;
-    max-height: 100%;
-    border-radius: .5rem;
-    border: 3px solid #343a40;
-    background: #e9ecef;
-    object-fit: contain;
-  }
-
-  /* ⭐抽卡按鈕固定在底部 */
-  #btnDrawContainer {
-    position: fixed;
-    bottom: 20px;        /* 往上保留距離 */
-    left: 0;
-    right: 0;
-    z-index: 10;
-    padding: 0 20px;     /* 左右留邊界 */
-  }
-</style>
-
+  <style>
+    body {
+      background: #f7f7f9;
+    }
+  
+    .card-preview {
+      width: 100%;
+      height: calc(100vh - 260px); /* ⭐高度加大間距，避免被按鈕壓到 */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  
+    #card-img {
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: .5rem;
+      border: 3px solid #343a40;
+      background: #e9ecef;
+      object-fit: contain;
+    }
+  
+    /* ⭐抽卡按鈕固定在底部 */
+    #btnDrawContainer {
+      position: fixed;
+      bottom: 20px;        /* 往上保留距離 */
+      left: 0;
+      right: 0;
+      z-index: 10;
+      padding: 0 20px;     /* 左右留邊界 */
+    }
+  </style>
 </head>
 <body>
 
@@ -103,28 +102,40 @@
     </button>
   </div>
 </div>
+
 <script>
   // ============================
-  // 牌組設定
+  // 牌組資料（從 decks.json 載入）
   // ============================
-  const DECKS = {
-    "deck_114_people": {
-      label: "114國學營 - 人物牌組",
-      path: "./decks/114國學營_人物/",
-      cards: [
-        "投影片1.PNG","投影片2.PNG","投影片3.PNG","投影片4.PNG",
-        "投影片5.PNG","投影片6.PNG","投影片7.PNG","投影片8.PNG",
-        "投影片9.PNG","投影片10.PNG","投影片11.PNG","投影片12.PNG"
-      ]
+  let DECKS = {};  // 以 id 為 key 存
+
+  async function loadDecksFromJson() {
+    try {
+      const res = await fetch('decks.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error('載入 decks.json 失敗');
+      const data = await res.json();
+
+      DECKS = {};
+      if (Array.isArray(data.decks)) {
+        data.decks.forEach(d => {
+          if (d.id && d.path && Array.isArray(d.cards)) {
+            DECKS[d.id] = d;
+          }
+        });
+      }
+
+      initDeckSelect();
+    } catch (err) {
+      console.error(err);
+      alert('載入牌組資料失敗，請檢查 decks.json 路徑與格式。');
     }
-    // 之後要新增牌組就照這個格式往下加
-  };
+  }
 
   function initDeckSelect() {
     const $sel = $("#deckSelect");
     $sel.empty().append(`<option value="">請選擇牌組</option>`);
     Object.keys(DECKS).forEach(k => {
-      $sel.append(`<option value="${k}">${DECKS[k].label}</option>`);
+      $sel.append(`<option value="${k}">${DECKS[k].label || k}</option>`);
     });
   }
 
@@ -141,7 +152,7 @@
     if (audioCtx.state === "suspended") audioCtx.resume();
   }
 
-  // 轉輪中的「喀喀喀」聲：短、乾脆、偏中高頻
+  // 轉輪中的「喀喀喀」聲
   function playSlotTick() {
     ensureAudio();
     if (!audioCtx) return;
@@ -150,8 +161,8 @@
     const gain = audioCtx.createGain();
     const now = audioCtx.currentTime;
 
-    osc.type = "square";                      // 比較機械感
-    osc.frequency.setValueAtTime(900, now);   // 中高頻
+    osc.type = "square";
+    osc.frequency.setValueAtTime(900, now);
     osc.frequency.exponentialRampToValueAtTime(700, now + 0.05);
 
     gain.gain.setValueAtTime(0.0, now);
@@ -165,7 +176,7 @@
     osc.stop(now + 0.08);
   }
 
-  // 最後停下來那一下：「咔 / 咚」感，頻率稍低、時間稍長
+  // 最後停下來那一下
   function playFinalStop() {
     ensureAudio();
     if (!audioCtx) return;
@@ -189,12 +200,12 @@
     osc.stop(now + 0.24);
   }
 
-  // 測試音效：先一串轉輪，再一聲停下
+  // 測試音效：一串 tick + 一聲 stop
   function testSound() {
     ensureAudio();
     if (!audioCtx) return;
     const ticks = 8;
-    const interval = 90; // ms
+    const interval = 90;
     for (let i = 0; i < ticks; i++) {
       setTimeout(() => playSlotTick(), i * interval);
     }
@@ -212,15 +223,23 @@
   }
 
   function showCard(deckKey, filename) {
-    $("#card-img").attr("src", DECKS[deckKey].path + filename);
+    const deck = DECKS[deckKey];
+    if (!deck) return;
+    $("#card-img").attr("src", deck.path + filename);
   }
 
   function startSpin() {
     const deckKey = $("#deckSelect").val();
-    if (!deckKey) return alert("請先選擇牌組");
+    if (!deckKey) {
+      alert("請先選擇牌組");
+      return;
+    }
 
     const deck = DECKS[deckKey];
-    if (!deck.cards.length) return;
+    if (!deck || !Array.isArray(deck.cards) || deck.cards.length === 0) {
+      alert("此牌組沒有卡片，請檢查 decks.json。");
+      return;
+    }
 
     let sec = parseFloat($("#spinDuration").val()) || 2;
     if (sec < 0.3) sec = 0.3;
@@ -231,13 +250,11 @@
 
     $("#btnDraw").prop("disabled", true).text("抽牌中…");
 
-    // 持續轉動＆tick 聲
     timer = setInterval(() => {
       showCard(deckKey, randomPick(deck.cards));
       playSlotTick();
     }, 90);
 
-    // 到時間停下來，補一聲停頓
     setTimeout(() => {
       clearInterval(timer);
       timer = null;
@@ -245,7 +262,6 @@
       const finalCard = randomPick(deck.cards);
       showCard(deckKey, finalCard);
 
-      // 停頓一下再出「咔」的感覺
       setTimeout(() => {
         playFinalStop();
       }, 80);
@@ -259,7 +275,7 @@
   // 初始化
   // ============================
   $(function () {
-    initDeckSelect();
+    loadDecksFromJson();          // 👈 改成從 JSON 載入
     $("#btnDraw").on("click", startSpin);
     $("#btnTestSound").on("click", testSound);
   });
