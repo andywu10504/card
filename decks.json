@@ -21,12 +21,19 @@
     },
     {
       "id": "deck_tarot",
-      "label": "Tarot 塔羅牌（示意）",
-      "path": "./decks/Tarot/",
+      "label": "求道機會",
+      "path": "./decks/求道機會/",
       "cards": [
-        "card01.jpg",
-        "card02.jpg",
-        "card03.jpg"
+        "求道機會_1.jpg",
+        "求道機會_2.jpg",
+        "求道機會_3.jpg",
+        "求道機會_4.jpg",
+        "求道機會_5.jpg",
+        "求道機會_6.jpg",
+        "求道機會_7.jpg",
+        "求道機會_8.jpg",
+        "求道機會_9.jpg",
+        "求道機會_10.jpg",
       ]
     }
   ]
