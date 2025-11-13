@@ -296,48 +296,68 @@
     $("#card-img").attr("src", deck.path + filename);
   }
 
-  function startSpin() {
-    const deckKey = $("#deckSelect").val();
-    if (!deckKey) {
-      alert("請先選擇牌組");
-      return;
-    }
+// ============================
+// 新版「滑順轉輪」抽卡
+// ============================
+function startSpin() {
+  const deckKey = $("#deckSelect").val();
+  if (!deckKey) {
+    alert("請先選擇牌組");
+    return;
+  }
 
-    const deck = DECKS[deckKey];
-    if (!deck || !Array.isArray(deck.cards) || deck.cards.length === 0) {
-      alert("此牌組沒有卡片，請檢查 decks.json。");
-      return;
-    }
+  const deck = DECKS[deckKey];
+  if (!deck || !Array.isArray(deck.cards) || deck.cards.length === 0) {
+    alert("此牌組沒有卡片，請檢查 decks.json。");
+    return;
+  }
 
-    let sec = parseFloat($("#spinDuration").val()) || 2;
-    if (sec < 0.3) sec = 0.3;
-    const duration = sec * 1000;
+  if (spinning) return;
+  spinning = true;
 
-    if (spinning) return;
-    spinning = true;
+  $("#btnDraw").prop("disabled", true).text("抽牌中…");
 
-    $("#btnDraw").prop("disabled", true).text("抽牌中…");
+  let totalTime = parseFloat($("#spinDuration").val()) || 2;
+  if (totalTime < 0.3) totalTime = 0.3;
+  totalTime *= 1000;
 
-    timer = setInterval(() => {
+  let start = performance.now();
+  let lastFrame = 0;
+
+  function spinFrame(now) {
+    const elapsed = now - start;
+    const t = Math.min(elapsed / totalTime, 1); // 0 → 1
+
+    // 減速曲線（Ease-out cubic）
+    const ease = 1 - Math.pow(1 - t, 3);
+
+    // 轉動速度：一開始超快 → 越來越慢
+    const minSpeed = 40;   // 最慢 (ms)
+    const maxSpeed = 15;   // 最快 (ms)
+    const currentSpeed = maxSpeed + (minSpeed - maxSpeed) * ease;
+
+    if (now - lastFrame >= currentSpeed) {
       showCard(deckKey, randomPick(deck.cards));
       playSlotTick();
-    }, 90);
+      lastFrame = now;
+    }
 
-    setTimeout(() => {
-      clearInterval(timer);
-      timer = null;
-
+    if (t < 1) {
+      requestAnimationFrame(spinFrame);
+    } else {
+      // 轉完 → 最終結果
       const finalCard = randomPick(deck.cards);
       showCard(deckKey, finalCard);
 
-      setTimeout(() => {
-        playFinalStop();
-      }, 80);
+      setTimeout(() => playFinalStop(), 120);
 
       spinning = false;
       $("#btnDraw").prop("disabled", false).text("開始抽卡");
-    }, duration);
+    }
   }
+
+  requestAnimationFrame(spinFrame);
+}
 
   // ============================
   // 初始化
