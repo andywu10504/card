@@ -64,6 +64,12 @@
   <a class="navbar-brand fw-bold" href="#">抽卡小工具</a>
 
   <div class="ms-auto d-flex align-items-center gap-2">
+    <!-- 歷史區 -->
+    <button id="btnHistory" class="btn btn-outline-secondary btn-sm" type="button"
+            data-bs-toggle="modal" data-bs-target="#historyModal">
+      <i class="fa-solid fa-clock-rotate-left"></i>
+    </button>
+
     <!-- 全螢幕 -->
     <button id="btnFullscreen" class="btn btn-outline-secondary btn-sm" type="button">
       <i class="fa-solid fa-expand"></i>
@@ -101,10 +107,36 @@
       <div class="form-text">抽卡轉動持續時間</div>
     </div>
 
+    <hr>
+
+    <!-- 背景音樂 -->
+    <div class="mb-3">
+      <label class="form-label">背景音樂（BGM）</label>
+      <div class="d-grid gap-2 mb-2">
+        <button id="btnTestBgm" class="btn btn-outline-success">
+          測試背景音樂 / 播放 / 暫停
+        </button>
+      </div>
+      <label for="bgmVolume" class="form-label small mb-1">
+        背景音樂音量
+      </label>
+      <input type="range" id="bgmVolume" class="form-range"
+             min="0" max="1" step="0.01" value="0.5">
+    </div>
+
+    <!-- 滾動音效音量 -->
+    <div class="mb-3">
+      <label for="sfxVolume" class="form-label small mb-1">
+        滾動／停頓音效音量
+      </label>
+      <input type="range" id="sfxVolume" class="form-range"
+             min="0" max="1" step="0.01" value="0.8">
+    </div>
+
     <!-- 測試音效 -->
     <div class="d-grid">
       <button id="btnTestSound" class="btn btn-outline-primary">
-        測試音效
+        測試滾動音效
       </button>
     </div>
   </div>
@@ -123,6 +155,32 @@
     <button id="btnDraw" class="btn btn-primary btn-lg">
       開始抽卡
     </button>
+  </div>
+</div>
+
+<!-- 歷史區 Modal -->
+<div class="modal fade" id="historyModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">抽卡歷史紀錄</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <ul id="historyList" class="list-group small">
+          <!-- 由 JS 填入 -->
+        </ul>
+        <div id="historyEmpty" class="text-muted text-center py-3 d-none">
+          尚無抽卡紀錄
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btnClearHistory" type="button" class="btn btn-outline-danger btn-sm">
+          清除歷史紀錄
+        </button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -208,9 +266,44 @@
   });
 
   // ============================
-  // Web Audio：slot machine 風格音效
+  // 背景音樂 BGM
+  // ============================
+  const BGM_SRC = 'BGM_Iframe Jazzy Frenchy.mp3';  // ★ 如果路徑不同改這裡
+  const bgm = new Audio(BGM_SRC);
+  bgm.loop = true;
+  bgm.volume = 0.5;
+
+  const bgmVolumeSlider = document.getElementById('bgmVolume');
+  const sfxVolumeSlider = document.getElementById('sfxVolume');
+
+  bgmVolumeSlider.addEventListener('input', () => {
+    const v = parseFloat(bgmVolumeSlider.value) || 0;
+    bgm.volume = v;
+  });
+
+  document.getElementById('btnTestBgm').addEventListener('click', async () => {
+    try {
+      if (bgm.paused) {
+        await bgm.play();
+      } else {
+        bgm.pause();
+      }
+    } catch (e) {
+      console.error(e);
+      alert('無法播放背景音樂，請檢查音樂檔路徑。');
+    }
+  });
+
+  // ============================
+  // Web Audio：slot machine 風格音效（含音量拉霸）
   // ============================
   let audioCtx = null;
+  let sfxVolume = parseFloat(sfxVolumeSlider.value) || 0.8;
+
+  sfxVolumeSlider.addEventListener('input', () => {
+    const v = parseFloat(sfxVolumeSlider.value);
+    sfxVolume = isNaN(v) ? 0.8 : v;
+  });
 
   function ensureAudio() {
     if (!audioCtx) {
@@ -223,7 +316,7 @@
   // 轉輪中的「喀喀喀」聲
   function playSlotTick() {
     ensureAudio();
-    if (!audioCtx) return;
+    if (!audioCtx || sfxVolume <= 0) return;
 
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
@@ -234,7 +327,7 @@
     osc.frequency.exponentialRampToValueAtTime(700, now + 0.05);
 
     gain.gain.setValueAtTime(0.0, now);
-    gain.gain.linearRampToValueAtTime(0.25, now + 0.01);
+    gain.gain.linearRampToValueAtTime(0.25 * sfxVolume, now + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.07);
 
     osc.connect(gain);
@@ -247,7 +340,7 @@
   // 最後停下來那一下
   function playFinalStop() {
     ensureAudio();
-    if (!audioCtx) return;
+    if (!audioCtx || sfxVolume <= 0) return;
 
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
@@ -258,7 +351,7 @@
     osc.frequency.exponentialRampToValueAtTime(280, now + 0.18);
 
     gain.gain.setValueAtTime(0.0, now);
-    gain.gain.linearRampToValueAtTime(0.4, now + 0.02);
+    gain.gain.linearRampToValueAtTime(0.4 * sfxVolume, now + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
 
     osc.connect(gain);
@@ -271,7 +364,7 @@
   // 測試音效：一串 tick + 一聲 stop
   function testSound() {
     ensureAudio();
-    if (!audioCtx) return;
+    if (!audioCtx || sfxVolume <= 0) return;
     const ticks = 8;
     const interval = 90;
     for (let i = 0; i < ticks; i++) {
@@ -280,11 +373,78 @@
     setTimeout(() => playFinalStop(), ticks * interval + 80);
   }
 
+  document.getElementById('btnTestSound').addEventListener('click', testSound);
+
   // ============================
-  // 抽卡流程
+  // 抽卡歷史紀錄
+  // ============================
+  const history = []; // {time, deckId, deckLabel, card, img}
+
+  function addHistory(deckKey, cardFile) {
+    const deck = DECKS[deckKey];
+    const now = new Date();
+    history.unshift({
+      time: now.toLocaleString(),
+      deckId: deckKey,
+      deckLabel: deck?.label || deckKey,
+      card: cardFile,
+      img: deck ? deck.path + cardFile : ''
+    });
+    // 最多保留 50 筆
+    if (history.length > 50) history.length = 50;
+  }
+
+  function renderHistory() {
+    const list = document.getElementById('historyList');
+    const empty = document.getElementById('historyEmpty');
+    list.innerHTML = '';
+
+    if (history.length === 0) {
+      empty.classList.remove('d-none');
+      return;
+    }
+    empty.classList.add('d-none');
+
+    history.forEach(item => {
+      const li = document.createElement('li');
+      li.className = 'list-group-item d-flex align-items-center';
+
+      if (item.img) {
+        const thumb = document.createElement('img');
+        thumb.src = item.img;
+        thumb.alt = item.card;
+        thumb.style.width = '60px';
+        thumb.style.height = '60px';
+        thumb.style.objectFit = 'cover';
+        thumb.className = 'me-3 rounded border';
+        li.appendChild(thumb);
+      }
+
+      const info = document.createElement('div');
+      info.innerHTML = `
+        <div><strong>${item.deckLabel}</strong></div>
+        <div>卡片：${item.card}</div>
+        <div class="text-muted small">${item.time}</div>
+      `;
+      li.appendChild(info);
+
+      list.appendChild(li);
+    });
+  }
+
+  // Modal 打開時渲染
+  const historyModal = document.getElementById('historyModal');
+  historyModal.addEventListener('show.bs.modal', renderHistory);
+
+  document.getElementById('btnClearHistory').addEventListener('click', () => {
+    history.length = 0;
+    renderHistory();
+  });
+
+  // ============================
+  // 抽卡流程（滑順轉輪）
   // ============================
   let spinning = false;
-  let timer = null;
 
   function randomPick(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
@@ -296,68 +456,66 @@
     $("#card-img").attr("src", deck.path + filename);
   }
 
-// ============================
-// 新版「滑順轉輪」抽卡
-// ============================
-function startSpin() {
-  const deckKey = $("#deckSelect").val();
-  if (!deckKey) {
-    alert("請先選擇牌組");
-    return;
-  }
-
-  const deck = DECKS[deckKey];
-  if (!deck || !Array.isArray(deck.cards) || deck.cards.length === 0) {
-    alert("此牌組沒有卡片，請檢查 decks.json。");
-    return;
-  }
-
-  if (spinning) return;
-  spinning = true;
-
-  $("#btnDraw").prop("disabled", true).text("抽牌中…");
-
-  let totalTime = parseFloat($("#spinDuration").val()) || 2;
-  if (totalTime < 0.5) totalTime = 0.5;
-  totalTime *= 1000;
-
-  let start = performance.now();
-  let lastFrame = 0;
-
-  function spinFrame(now) {
-    const elapsed = now - start;
-    const t = Math.min(elapsed / totalTime, 1); // 0 → 1
-
-    // 減速曲線（Ease-out cubic）
-    const ease = 1 - Math.pow(1 - t, 3);
-
-    // 轉動速度：一開始超快 → 越來越慢
-    const minSpeed = 40;   // 最慢 (ms)
-    const maxSpeed = 30;   // 最快 (ms)
-    const currentSpeed = maxSpeed + (minSpeed - maxSpeed) * ease;
-
-    if (now - lastFrame >= currentSpeed) {
-      showCard(deckKey, randomPick(deck.cards));
-      playSlotTick();
-      lastFrame = now;
+  function startSpin() {
+    const deckKey = $("#deckSelect").val();
+    if (!deckKey) {
+      alert("請先選擇牌組");
+      return;
     }
 
-    if (t < 1) {
-      requestAnimationFrame(spinFrame);
-    } else {
-      // 轉完 → 最終結果
-      const finalCard = randomPick(deck.cards);
-      showCard(deckKey, finalCard);
-
-      setTimeout(() => playFinalStop(), 120);
-
-      spinning = false;
-      $("#btnDraw").prop("disabled", false).text("開始抽卡");
+    const deck = DECKS[deckKey];
+    if (!deck || !Array.isArray(deck.cards) || deck.cards.length === 0) {
+      alert("此牌組沒有卡片，請檢查 decks.json。");
+      return;
     }
-  }
 
-  requestAnimationFrame(spinFrame);
-}
+    if (spinning) return;
+    spinning = true;
+
+    $("#btnDraw").prop("disabled", true).text("抽牌中…");
+
+    let totalTime = parseFloat($("#spinDuration").val()) || 2;
+    if (totalTime < 0.5) totalTime = 0.5;
+    totalTime *= 1000;
+
+    let start = performance.now();
+    let lastFrame = 0;
+
+    function spinFrame(now) {
+      const elapsed = now - start;
+      const t = Math.min(elapsed / totalTime, 1); // 0 → 1
+
+      // 減速曲線（Ease-out cubic）
+      const ease = 1 - Math.pow(1 - t, 3);
+
+      // 轉動速度：一開始超快 → 越來越慢
+      const minSpeed = 40;   // 最慢 (ms)
+      const maxSpeed = 30;   // 最快 (ms)
+      const currentSpeed = maxSpeed + (minSpeed - maxSpeed) * ease;
+
+      if (now - lastFrame >= currentSpeed) {
+        showCard(deckKey, randomPick(deck.cards));
+        playSlotTick();
+        lastFrame = now;
+      }
+
+      if (t < 1) {
+        requestAnimationFrame(spinFrame);
+      } else {
+        // 轉完 → 最終結果
+        const finalCard = randomPick(deck.cards);
+        showCard(deckKey, finalCard);
+        addHistory(deckKey, finalCard);
+
+        setTimeout(() => playFinalStop(), 120);
+
+        spinning = false;
+        $("#btnDraw").prop("disabled", false).text("開始抽卡");
+      }
+    }
+
+    requestAnimationFrame(spinFrame);
+  }
 
   // ============================
   // 初始化
