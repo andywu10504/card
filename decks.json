@@ -2,7 +2,7 @@
   "decks": [
     {
       "id": "deck_114_people",
-      "label": "114國學營 - 人物牌組",
+      "label": "114國學營人物牌組",
       "path": "./decks/114國學營_人物/",
       "cards": [
         "投影片1.PNG",
@@ -21,7 +21,7 @@
     },
     {
       "id": "deck_tarot",
-      "label": "求道機會",
+      "label": "天幣流求道機會",
       "path": "./decks/求道機會/",
       "cards": [
         "求道機會_1.jpg",
