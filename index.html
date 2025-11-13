@@ -15,11 +15,10 @@
       background: #f7f7f9;
     }
 
-    /* 牌圖區塊：盡量放大、不變形 */
+    /* 牌圖區：盡量放大、不變形 */
     .card-preview {
       width: 100%;
-      height: calc(100vh - 220px); /* 留一點空間給上方選單和下方按鈕 */
-      max-height: 700px;
+      height: calc(100vh - 180px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -32,163 +31,229 @@
       border: 3px solid #343a40;
       background: #e9ecef;
       object-fit: contain;
-      display: block;
     }
   </style>
 </head>
 <body>
-<div class="container py-3">
 
-  <!-- 第一行：選擇牌組 -->
-  <div class="mb-3">
-    <label for="deckSelect" class="form-label mb-1">選擇牌組</label>
-    <select id="deckSelect" class="form-select">
-      <!-- 由 JS 動態填入 -->
-    </select>
+<!-- Navbar -->
+<nav class="navbar bg-body-tertiary px-3 mb-2">
+  <a class="navbar-brand fw-bold" href="#">抽卡小工具</a>
+
+  <button class="btn btn-outline-secondary"
+          data-bs-toggle="offcanvas"
+          data-bs-target="#settingsPanel">
+    ⚙ 設定
+  </button>
+</nav>
+
+<!-- 右側 Offcanvas 設定面板 -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="settingsPanel">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title">設定區</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
   </div>
 
-  <!-- 第二行：牌圖（只有圖） -->
-  <div class="mb-3">
-    <div class="card-preview">
-      <img id="card-img" src="" alt="">
+  <div class="offcanvas-body">
+    <!-- 牌組選擇 -->
+    <div class="mb-3">
+      <label for="deckSelect" class="form-label">選擇牌組</label>
+      <select id="deckSelect" class="form-select"></select>
     </div>
-  </div>
 
-  <!-- 第三行：抽卡按鈕 -->
-  <div class="mb-2">
+    <!-- 滾動時間 -->
+    <div class="mb-3">
+      <label for="spinDuration" class="form-label">滾動時間（秒）</label>
+      <input type="number" id="spinDuration" class="form-control"
+             min="0.3" step="0.1" value="2.0">
+      <div class="form-text">抽卡轉動持續時間</div>
+    </div>
+
+    <!-- 測試音效 -->
     <div class="d-grid">
-      <button id="btnDraw" class="btn btn-primary btn-lg">
-        開始抽卡
+      <button id="btnTestSound" class="btn btn-outline-primary">
+        測試音效
       </button>
     </div>
+  </div>
+</div>
+
+<!-- 主畫面 -->
+<div class="container-fluid">
+
+  <!-- 卡片顯示 -->
+  <div class="card-preview">
+    <img id="card-img" src="" alt="">
+  </div>
+
+  <!-- 抽卡按鈕 -->
+  <div class="d-grid px-3 mb-3">
+    <button id="btnDraw" class="btn btn-primary btn-lg">
+      開始抽卡
+    </button>
   </div>
 
 </div>
 
 <script>
-  // ============================================
-  // 1. 這裡設定你的牌組（依你的資料夾調整）
-  // ============================================
+  // ============================
+  // 牌組設定
+  // ============================
   const DECKS = {
     "deck_114_people": {
       label: "114國學營 - 人物牌組",
       path: "./decks/114國學營_人物/",
       cards: [
-        "投影片1.PNG",
-        "投影片2.PNG",
-        "投影片3.PNG",
-        "投影片4.PNG",
-        "投影片5.PNG",
-        "投影片6.PNG",
-        "投影片7.PNG",
-        "投影片8.PNG",
-        "投影片9.PNG",
-        "投影片10.PNG",
-        "投影片11.PNG",
-        "投影片12.PNG"
-      ]
-    },
-    "deck_tarot": {
-      label: "Tarot 塔羅牌（示意）",
-      path: "./decks/Tarot/",
-      cards: [
-        "card01.jpg",
-        "card02.jpg",
-        "card03.jpg"
+        "投影片1.PNG","投影片2.PNG","投影片3.PNG","投影片4.PNG",
+        "投影片5.PNG","投影片6.PNG","投影片7.PNG","投影片8.PNG",
+        "投影片9.PNG","投影片10.PNG","投影片11.PNG","投影片12.PNG"
       ]
     }
     // 之後要新增牌組就照這個格式往下加
   };
 
-  // ============================================
-  // 2. 初始化下拉選單
-  // ============================================
   function initDeckSelect() {
     const $sel = $("#deckSelect");
-    $sel.empty();
-
-    $sel.append(`<option value="">請選擇牌組</option>`);
-
-    Object.keys(DECKS).forEach(key => {
-      const deck = DECKS[key];
-      $sel.append(
-        `<option value="${key}">${deck.label}</option>`
-      );
+    $sel.empty().append(`<option value="">請選擇牌組</option>`);
+    Object.keys(DECKS).forEach(k => {
+      $sel.append(`<option value="${k}">${DECKS[k].label}</option>`);
     });
   }
 
-  // ============================================
-  // 3. 抽卡邏輯：轉動一段時間後停下
-  // ============================================
-  let spinning = false;
-  let spinTimer = null;
+  // ============================
+  // Web Audio：slot machine 風格音效
+  // ============================
+  let audioCtx = null;
 
-  function randomPick(arr) {
-    const idx = Math.floor(Math.random() * arr.length);
-    return { idx, value: arr[idx] };
+  function ensureAudio() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
   }
 
-  function showCard(deckKey, cardFileName) {
-    const deck = DECKS[deckKey];
-    if (!deck) return;
+  // 轉輪中的「喀喀喀」聲：短、乾脆、偏中高頻
+  function playSlotTick() {
+    ensureAudio();
+    if (!audioCtx) return;
 
-    const imgPath = deck.path + cardFileName;
-    $("#card-img")
-      .attr("src", imgPath)
-      .attr("alt", cardFileName);
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const now = audioCtx.currentTime;
+
+    osc.type = "square";                      // 比較機械感
+    osc.frequency.setValueAtTime(900, now);   // 中高頻
+    osc.frequency.exponentialRampToValueAtTime(700, now + 0.05);
+
+    gain.gain.setValueAtTime(0.0, now);
+    gain.gain.linearRampToValueAtTime(0.25, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.07);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.08);
+  }
+
+  // 最後停下來那一下：「咔 / 咚」感，頻率稍低、時間稍長
+  function playFinalStop() {
+    ensureAudio();
+    if (!audioCtx) return;
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const now = audioCtx.currentTime;
+
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(500, now);
+    osc.frequency.exponentialRampToValueAtTime(280, now + 0.18);
+
+    gain.gain.setValueAtTime(0.0, now);
+    gain.gain.linearRampToValueAtTime(0.4, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.24);
+  }
+
+  // 測試音效：先一串轉輪，再一聲停下
+  function testSound() {
+    ensureAudio();
+    if (!audioCtx) return;
+    const ticks = 8;
+    const interval = 90; // ms
+    for (let i = 0; i < ticks; i++) {
+      setTimeout(() => playSlotTick(), i * interval);
+    }
+    setTimeout(() => playFinalStop(), ticks * interval + 80);
+  }
+
+  // ============================
+  // 抽卡流程
+  // ============================
+  let spinning = false;
+  let timer = null;
+
+  function randomPick(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function showCard(deckKey, filename) {
+    $("#card-img").attr("src", DECKS[deckKey].path + filename);
   }
 
   function startSpin() {
     const deckKey = $("#deckSelect").val();
-    if (!deckKey) {
-      alert("請先選擇牌組！");
-      return;
-    }
+    if (!deckKey) return alert("請先選擇牌組");
 
     const deck = DECKS[deckKey];
-    if (!deck || !Array.isArray(deck.cards) || deck.cards.length === 0) {
-      alert("這個牌組沒有卡片，請檢查設定與檔案。");
-      return;
-    }
+    if (!deck.cards.length) return;
 
-    if (spinning) {
-      return;
-    }
+    let sec = parseFloat($("#spinDuration").val()) || 2;
+    if (sec < 0.3) sec = 0.3;
+    const duration = sec * 1000;
 
+    if (spinning) return;
     spinning = true;
-    const $btn = $("#btnDraw");
-    $btn.prop("disabled", true).text("抽牌中…");
 
-    // 轉動時不斷隨機切換
-    spinTimer = setInterval(() => {
-      const pick = randomPick(deck.cards);
-      showCard(deckKey, pick.value);
-    }, 80); // 每 80ms 換一張
+    $("#btnDraw").prop("disabled", true).text("抽牌中…");
 
-    // 隨機設定轉動時間（例如 1.5～2.5 秒）
-    const duration = 1500 + Math.random() * 1000;
+    // 持續轉動＆tick 聲
+    timer = setInterval(() => {
+      showCard(deckKey, randomPick(deck.cards));
+      playSlotTick();
+    }, 90);
 
+    // 到時間停下來，補一聲停頓
     setTimeout(() => {
-      clearInterval(spinTimer);
-      spinTimer = null;
+      clearInterval(timer);
+      timer = null;
 
-      const finalPick = randomPick(deck.cards);
-      showCard(deckKey, finalPick.value);
+      const finalCard = randomPick(deck.cards);
+      showCard(deckKey, finalCard);
+
+      // 停頓一下再出「咔」的感覺
+      setTimeout(() => {
+        playFinalStop();
+      }, 80);
 
       spinning = false;
-      $btn.prop("disabled", false).text("開始抽卡");
+      $("#btnDraw").prop("disabled", false).text("開始抽卡");
     }, duration);
   }
 
-  // ============================================
-  // 4. 綁定事件 & 初始化
-  // ============================================
+  // ============================
+  // 初始化
+  // ============================
   $(function () {
     initDeckSelect();
-
-    $("#btnDraw").on("click", function () {
-      startSpin();
-    });
+    $("#btnDraw").on("click", startSpin);
+    $("#btnTestSound").on("click", testSound);
   });
 </script>
 
