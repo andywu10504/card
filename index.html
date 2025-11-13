@@ -10,19 +10,32 @@
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
+  <!-- Font Awesome -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
   <style>
     body {
       background: #f7f7f9;
+      padding-bottom: 100px; /* 給固定按鈕一點空間，避免內容被遮住 */
     }
-  
+
+    /* 圖片區：撐滿 Nav 與按鈕之間，RWD */
     .card-preview {
       width: 100%;
-      height: calc(100vh - 260px); /* ⭐高度加大間距，避免被按鈕壓到 */
+      height: calc(100vh - 180px);
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 0 16px;
     }
-  
+
+    @media (max-width: 576px) {
+      .card-preview {
+        height: calc(100vh - 190px); /* 手機再多留一點給按鈕 */
+      }
+    }
+
     #card-img {
       max-width: 100%;
       max-height: 100%;
@@ -30,16 +43,17 @@
       border: 3px solid #343a40;
       background: #e9ecef;
       object-fit: contain;
+      display: block;
     }
-  
-    /* ⭐抽卡按鈕固定在底部 */
+
+    /* 抽卡按鈕固定在底部，略往上留距離 */
     #btnDrawContainer {
       position: fixed;
-      bottom: 20px;        /* 往上保留距離 */
+      bottom: 16px;
       left: 0;
       right: 0;
       z-index: 10;
-      padding: 0 20px;     /* 左右留邊界 */
+      padding: 0 20px;
     }
   </style>
 </head>
@@ -49,11 +63,20 @@
 <nav class="navbar bg-body-tertiary px-3 mb-2">
   <a class="navbar-brand fw-bold" href="#">抽卡小工具</a>
 
-  <button class="btn btn-outline-secondary"
-          data-bs-toggle="offcanvas"
-          data-bs-target="#settingsPanel">
-    ⚙ 設定
-  </button>
+  <div class="ms-auto d-flex align-items-center gap-2">
+    <!-- 全螢幕 -->
+    <button id="btnFullscreen" class="btn btn-outline-secondary btn-sm" type="button">
+      <i class="fa-solid fa-expand"></i>
+    </button>
+
+    <!-- 設定（右側 offcanvas） -->
+    <button class="btn btn-outline-secondary btn-sm"
+            type="button"
+            data-bs-toggle="offcanvas"
+            data-bs-target="#settingsPanel">
+      <i class="fa-solid fa-sliders"></i>
+    </button>
+  </div>
 </nav>
 
 <!-- 右側 Offcanvas 設定面板 -->
@@ -90,12 +113,12 @@
 <!-- 主畫面 -->
 <div class="container-fluid">
 
-  <!-- 卡片顯示 -->
+  <!-- 卡片顯示（會自動撐滿 Navbar 和按鈕之間） -->
   <div class="card-preview">
     <img id="card-img" src="" alt="">
   </div>
 
-  <!-- 抽卡按鈕 -->
+  <!-- 抽卡按鈕（固定在底部） -->
   <div id="btnDrawContainer" class="d-grid">
     <button id="btnDraw" class="btn btn-primary btn-lg">
       開始抽卡
@@ -138,6 +161,51 @@
       $sel.append(`<option value="${k}">${DECKS[k].label || k}</option>`);
     });
   }
+
+  // ============================
+  // 全螢幕切換
+  // ============================
+  const fsBtn = document.getElementById('btnFullscreen');
+  const fsIcon = fsBtn.querySelector('i');
+
+  function isFullscreen() {
+    return document.fullscreenElement ||
+           document.webkitFullscreenElement ||
+           document.mozFullScreenElement ||
+           document.msFullscreenElement;
+  }
+
+  function requestFullscreen(elem) {
+    if (elem.requestFullscreen) return elem.requestFullscreen();
+    if (elem.webkitRequestFullscreen) return elem.webkitRequestFullscreen();
+    if (elem.mozRequestFullScreen) return elem.mozRequestFullScreen();
+    if (elem.msRequestFullscreen) return elem.msRequestFullscreen();
+  }
+
+  function exitFullscreen() {
+    if (document.exitFullscreen) return document.exitFullscreen();
+    if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
+    if (document.mozCancelFullScreen) return document.mozCancelFullScreen();
+    if (document.msExitFullscreen) return document.msExitFullscreen();
+  }
+
+  fsBtn.addEventListener('click', () => {
+    if (!isFullscreen()) {
+      requestFullscreen(document.documentElement);
+    } else {
+      exitFullscreen();
+    }
+  });
+
+  document.addEventListener('fullscreenchange', () => {
+    if (isFullscreen()) {
+      fsIcon.classList.remove('fa-expand');
+      fsIcon.classList.add('fa-compress');
+    } else {
+      fsIcon.classList.remove('fa-compress');
+      fsIcon.classList.add('fa-expand');
+    }
+  });
 
   // ============================
   // Web Audio：slot machine 風格音效
@@ -275,7 +343,7 @@
   // 初始化
   // ============================
   $(function () {
-    loadDecksFromJson();          // 👈 改成從 JSON 載入
+    loadDecksFromJson();          // 從 JSON 載入牌組
     $("#btnDraw").on("click", startSpin);
     $("#btnTestSound").on("click", testSound);
   });
