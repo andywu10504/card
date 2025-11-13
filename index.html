@@ -318,7 +318,7 @@ function startSpin() {
   $("#btnDraw").prop("disabled", true).text("抽牌中…");
 
   let totalTime = parseFloat($("#spinDuration").val()) || 2;
-  if (totalTime < 0.3) totalTime = 0.3;
+  if (totalTime < 0.5) totalTime = 0.5;
   totalTime *= 1000;
 
   let start = performance.now();
@@ -333,7 +333,7 @@ function startSpin() {
 
     // 轉動速度：一開始超快 → 越來越慢
     const minSpeed = 40;   // 最慢 (ms)
-    const maxSpeed = 25;   // 最快 (ms)
+    const maxSpeed = 30;   // 最快 (ms)
     const currentSpeed = maxSpeed + (minSpeed - maxSpeed) * ease;
 
     if (now - lastFrame >= currentSpeed) {
