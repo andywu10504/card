@@ -1,0 +1,33 @@
+{
+  "decks": [
+    {
+      "id": "deck_114_people",
+      "label": "114國學營 - 人物牌組",
+      "path": "./decks/114國學營_人物/",
+      "cards": [
+        "投影片1.PNG",
+        "投影片2.PNG",
+        "投影片3.PNG",
+        "投影片4.PNG",
+        "投影片5.PNG",
+        "投影片6.PNG",
+        "投影片7.PNG",
+        "投影片8.PNG",
+        "投影片9.PNG",
+        "投影片10.PNG",
+        "投影片11.PNG",
+        "投影片12.PNG"
+      ]
+    },
+    {
+      "id": "deck_tarot",
+      "label": "Tarot 塔羅牌（示意）",
+      "path": "./decks/Tarot/",
+      "cards": [
+        "card01.jpg",
+        "card02.jpg",
+        "card03.jpg"
+      ]
+    }
+  ]
+}
