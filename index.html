@@ -333,7 +333,7 @@ function startSpin() {
 
     // 轉動速度：一開始超快 → 越來越慢
     const minSpeed = 40;   // 最慢 (ms)
-    const maxSpeed = 15;   // 最快 (ms)
+    const maxSpeed = 25;   // 最快 (ms)
     const currentSpeed = maxSpeed + (minSpeed - maxSpeed) * ease;
 
     if (now - lastFrame >= currentSpeed) {
