@@ -14,69 +14,52 @@
     body {
       background: #f7f7f9;
     }
+
+    /* 牌圖區塊：盡量放大、不變形 */
     .card-preview {
-      max-width: 320px;
-      margin: 0 auto;
-    }
-    #card-img {
       width: 100%;
-      height: auto;
+      height: calc(100vh - 220px); /* 留一點空間給上方選單和下方按鈕 */
+      max-height: 700px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #card-img {
+      max-width: 100%;
+      max-height: 100%;
       border-radius: .5rem;
       border: 3px solid #343a40;
       background: #e9ecef;
       object-fit: contain;
-    }
-    .spin-status {
-      min-height: 1.5rem;
+      display: block;
     }
   </style>
 </head>
 <body>
-<div class="container py-4">
+<div class="container py-3">
 
-  <div class="text-center mb-4">
-    <h1 class="h3 fw-bold mb-1">抽卡小工具</h1>
-    <p class="text-muted mb-0">選擇牌組 → 按下「開始抽卡」→ 轉一轉後停下來</p>
+  <!-- 第一行：選擇牌組 -->
+  <div class="mb-3">
+    <label for="deckSelect" class="form-label mb-1">選擇牌組</label>
+    <select id="deckSelect" class="form-select">
+      <!-- 由 JS 動態填入 -->
+    </select>
   </div>
 
-  <!-- 控制區 -->
-  <div class="card shadow-sm mb-4">
-    <div class="card-body">
-      <div class="row g-3 align-items-end">
-        <div class="col-md-6">
-          <label for="deckSelect" class="form-label mb-1">選擇牌組</label>
-          <select id="deckSelect" class="form-select">
-            <!-- 由 JS 動態填入 -->
-          </select>
-        </div>
-        <div class="col-md-6 text-md-end text-center">
-          <button id="btnDraw" class="btn btn-primary me-2">
-            開始抽卡
-          </button>
-          <button id="btnReset" class="btn btn-outline-secondary">
-            清空顯示
-          </button>
-        </div>
-      </div>
-      <div class="mt-3 text-muted small">
-        若沒反應：請確認牌組路徑與檔名是否正確、圖片有放到對應資料夾。
-      </div>
+  <!-- 第二行：牌圖（只有圖） -->
+  <div class="mb-3">
+    <div class="card-preview">
+      <img id="card-img" src="" alt="">
     </div>
   </div>
 
-  <!-- 顯示區 -->
-  <div class="card shadow-sm">
-    <div class="card-body text-center">
-      <div class="spin-status mb-2">
-        <span id="spinStatus" class="text-secondary">尚未抽卡</span>
-      </div>
-
-      <div class="card-preview mb-3">
-        <img id="card-img" src="" alt="抽出的卡片會顯示在這裡">
-      </div>
-
-      <div class="fw-bold fs-5" id="card-name">（卡片名稱）</div>
-      <div class="text-muted small" id="deck-name">（牌組名稱）</div>
+  <!-- 第三行：抽卡按鈕 -->
+  <div class="mb-2">
+    <div class="d-grid">
+      <button id="btnDraw" class="btn btn-primary btn-lg">
+        開始抽卡
+      </button>
     </div>
   </div>
 
@@ -86,10 +69,6 @@
   // ============================================
   // 1. 這裡設定你的牌組（依你的資料夾調整）
   // ============================================
-  // key: 內部代號
-  // label: 下拉式選單顯示的文字
-  // path: 此牌組的資料夾路徑（相對於 index.html）
-  // cards: 該資料夾內的圖片檔名（jpg / png 皆可）
   const DECKS = {
     "deck_114_people": {
       label: "114國學營 - 人物牌組",
@@ -128,10 +107,8 @@
     const $sel = $("#deckSelect");
     $sel.empty();
 
-    // 加一個請選擇
     $sel.append(`<option value="">請選擇牌組</option>`);
 
-    // 從 DECKS 填入
     Object.keys(DECKS).forEach(key => {
       const deck = DECKS[key];
       $sel.append(
@@ -159,11 +136,6 @@
     $("#card-img")
       .attr("src", imgPath)
       .attr("alt", cardFileName);
-
-    // 顯示檔名（去掉副檔名）當卡片名稱
-    const nameWithoutExt = cardFileName.replace(/\.[^.]+$/, "");
-    $("#card-name").text(nameWithoutExt || "（未命名卡片）");
-    $("#deck-name").text(deck.label);
   }
 
   function startSpin() {
@@ -180,41 +152,32 @@
     }
 
     if (spinning) {
-      // 避免重複按
       return;
     }
 
     spinning = true;
-    $("#spinStatus").text("抽牌中，請稍候…");
+    const $btn = $("#btnDraw");
+    $btn.prop("disabled", true).text("抽牌中…");
 
     // 轉動時不斷隨機切換
     spinTimer = setInterval(() => {
       const pick = randomPick(deck.cards);
       showCard(deckKey, pick.value);
-    }, 80); // 每 80ms 換一張，轉起來
+    }, 80); // 每 80ms 換一張
 
     // 隨機設定轉動時間（例如 1.5～2.5 秒）
     const duration = 1500 + Math.random() * 1000;
 
     setTimeout(() => {
-      // 停止轉動
       clearInterval(spinTimer);
       spinTimer = null;
 
       const finalPick = randomPick(deck.cards);
       showCard(deckKey, finalPick.value);
-      $("#spinStatus").text("抽牌完成！");
+
       spinning = false;
+      $btn.prop("disabled", false).text("開始抽卡");
     }, duration);
-  }
-
-  function resetDisplay() {
-    if (spinning) return; // 轉動中就不要清除
-
-    $("#card-img").attr("src", "").attr("alt", "");
-    $("#card-name").text("（卡片名稱）");
-    $("#deck-name").text("（牌組名稱）");
-    $("#spinStatus").text("尚未抽卡");
   }
 
   // ============================================
@@ -225,10 +188,6 @@
 
     $("#btnDraw").on("click", function () {
       startSpin();
-    });
-
-    $("#btnReset").on("click", function () {
-      resetDisplay();
     });
   });
 </script>
