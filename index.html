@@ -107,6 +107,14 @@
       <div class="form-text">抽卡轉動持續時間</div>
     </div>
 
+    <!-- 是否允許重複出卡 -->
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="allowDuplicate" checked>
+      <label class="form-check-label" for="allowDuplicate">
+        允許重複出卡
+      </label>
+    </div>
+
     <hr>
 
     <!-- 背景音樂 -->
@@ -167,6 +175,14 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+        <!-- 篩選牌組 -->
+        <div class="mb-2 d-flex align-items-center gap-2 flex-wrap">
+          <label for="historyFilterDeck" class="form-label mb-0 small">顯示牌組</label>
+          <select id="historyFilterDeck" class="form-select form-select-sm" style="max-width: 220px;">
+            <option value="">全部牌組</option>
+          </select>
+        </div>
+
         <ul id="historyList" class="list-group small">
           <!-- 由 JS 填入 -->
         </ul>
@@ -186,9 +202,22 @@
 
 <script>
   // ============================
+  // LocalStorage key 設定
+  // ============================
+  const LS_PREFIX        = 'cardTool_';
+  const LS_KEY_DECK      = LS_PREFIX + 'lastDeck';
+  const LS_KEY_BGM       = LS_PREFIX + 'bgmVolume';
+  const LS_KEY_SFX       = LS_PREFIX + 'sfxVolume';
+  const LS_KEY_HISTORY   = LS_PREFIX + 'history';
+  const LS_KEY_ALLOW_DUP = LS_PREFIX + 'allowDuplicate';
+
+  // ============================
   // 牌組資料（從 decks.json 載入）
   // ============================
-  let DECKS = {};  // 以 id 為 key 存
+  let DECKS = {};              // 以 id 為 key 存
+  let initialDeckId = null;    // 從 localStorage 還原用
+  let history = [];            // 抽卡歷史
+  const usedCardsByDeck = {};  // 不重複出卡時使用：{ deckId: Set(cardFile) }
 
   async function loadDecksFromJson() {
     try {
@@ -218,6 +247,11 @@
     Object.keys(DECKS).forEach(k => {
       $sel.append(`<option value="${k}">${DECKS[k].label || k}</option>`);
     });
+
+    // 還原最後使用牌組
+    if (initialDeckId && DECKS[initialDeckId]) {
+      $sel.val(initialDeckId);
+    }
   }
 
   // ============================
@@ -268,17 +302,77 @@
   // ============================
   // 背景音樂 BGM
   // ============================
-  const BGM_SRC = './BGM_Iframe Jazzy Frenchy.mp3';  // ★ 如果路徑不同改這裡
+  const BGM_SRC = './BGM_Iframe Jazzy Frenchy.mp3';  // ★ 路徑不同改這裡
   const bgm = new Audio(BGM_SRC);
   bgm.loop = true;
   bgm.volume = 0.5;
 
   const bgmVolumeSlider = document.getElementById('bgmVolume');
   const sfxVolumeSlider = document.getElementById('sfxVolume');
+  const allowDupCheckbox = document.getElementById('allowDuplicate');
+  const historyFilterSelect = document.getElementById('historyFilterDeck');
+
+  function savePreferences() {
+    try {
+      localStorage.setItem(LS_KEY_BGM, bgmVolumeSlider.value);
+      localStorage.setItem(LS_KEY_SFX, sfxVolumeSlider.value);
+      localStorage.setItem(LS_KEY_DECK, document.getElementById('deckSelect').value || '');
+      localStorage.setItem(LS_KEY_ALLOW_DUP, allowDupCheckbox.checked ? 'true' : 'false');
+    } catch (e) {
+      console.warn('無法寫入 localStorage(preferences)', e);
+    }
+  }
+
+  function saveHistory() {
+    try {
+      localStorage.setItem(LS_KEY_HISTORY, JSON.stringify(history));
+    } catch (e) {
+      console.warn('無法寫入 localStorage(history)', e);
+    }
+  }
+
+  function loadPreferencesFromLocalStorage() {
+    try {
+      const bgmV = localStorage.getItem(LS_KEY_BGM);
+      if (bgmV !== null) {
+        bgmVolumeSlider.value = bgmV;
+        bgm.volume = parseFloat(bgmV) || 0;
+      }
+
+      const sfxV = localStorage.getItem(LS_KEY_SFX);
+      if (sfxV !== null) {
+        sfxVolumeSlider.value = sfxV;
+        sfxVolume = parseFloat(sfxV) || 0.8;
+      }
+
+      const deckId = localStorage.getItem(LS_KEY_DECK);
+      if (deckId) {
+        initialDeckId = deckId;
+      }
+
+      const allowDup = localStorage.getItem(LS_KEY_ALLOW_DUP);
+      if (allowDup !== null) {
+        allowDupCheckbox.checked = allowDup === 'true';
+      }
+
+      const hRaw = localStorage.getItem(LS_KEY_HISTORY);
+      if (hRaw) {
+        const arr = JSON.parse(hRaw);
+        if (Array.isArray(arr)) {
+          history = arr
+            .filter(x => x && x.deckId && x.card)
+            .slice(0, 200); // 做個上限
+        }
+      }
+    } catch (e) {
+      console.warn('讀取 localStorage 失敗', e);
+    }
+  }
 
   bgmVolumeSlider.addEventListener('input', () => {
     const v = parseFloat(bgmVolumeSlider.value) || 0;
     bgm.volume = v;
+    savePreferences();
   });
 
   document.getElementById('btnTestBgm').addEventListener('click', async () => {
@@ -303,7 +397,10 @@
   sfxVolumeSlider.addEventListener('input', () => {
     const v = parseFloat(sfxVolumeSlider.value);
     sfxVolume = isNaN(v) ? 0.8 : v;
+    savePreferences();
   });
+
+  allowDupCheckbox.addEventListener('change', savePreferences);
 
   function ensureAudio() {
     if (!audioCtx) {
@@ -378,8 +475,6 @@
   // ============================
   // 抽卡歷史紀錄
   // ============================
-  const history = []; // {time, deckId, deckLabel, card, img}
-
   function addHistory(deckKey, cardFile) {
     const deck = DECKS[deckKey];
     const now = new Date();
@@ -390,8 +485,33 @@
       card: cardFile,
       img: deck ? deck.path + cardFile : ''
     });
-    // 最多保留 50 筆
-    if (history.length > 50) history.length = 50;
+    // 最多保留 200 筆
+    if (history.length > 200) history.length = 200;
+    saveHistory();
+  }
+
+  function buildHistoryFilterOptions() {
+    if (!historyFilterSelect) return;
+
+    const current = historyFilterSelect.value;
+    const map = new Map(); // deckId -> deckLabel
+    history.forEach(h => {
+      if (!map.has(h.deckId)) {
+        map.set(h.deckId, h.deckLabel);
+      }
+    });
+
+    historyFilterSelect.innerHTML = '<option value="">全部牌組</option>';
+    map.forEach((label, id) => {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = label;
+      historyFilterSelect.appendChild(opt);
+    });
+
+    if (current && map.has(current)) {
+      historyFilterSelect.value = current;
+    }
   }
 
   function renderHistory() {
@@ -399,13 +519,20 @@
     const empty = document.getElementById('historyEmpty');
     list.innerHTML = '';
 
-    if (history.length === 0) {
+    buildHistoryFilterOptions();
+    const filterDeckId = historyFilterSelect ? historyFilterSelect.value : '';
+
+    const filtered = filterDeckId
+      ? history.filter(h => h.deckId === filterDeckId)
+      : history;
+
+    if (filtered.length === 0) {
       empty.classList.remove('d-none');
       return;
     }
     empty.classList.add('d-none');
 
-    history.forEach(item => {
+    filtered.forEach(item => {
       const li = document.createElement('li');
       li.className = 'list-group-item d-flex align-items-center';
 
@@ -438,11 +565,16 @@
 
   document.getElementById('btnClearHistory').addEventListener('click', () => {
     history.length = 0;
+    saveHistory();
     renderHistory();
   });
 
+  if (historyFilterSelect) {
+    historyFilterSelect.addEventListener('change', renderHistory);
+  }
+
   // ============================
-  // 抽卡流程（滑順轉輪）
+  // 抽卡流程（滑順轉輪 + 可控制是否重複）
   // ============================
   let spinning = false;
 
@@ -474,6 +606,30 @@
 
     $("#btnDraw").prop("disabled", true).text("抽牌中…");
 
+    // 是否允許重複出卡
+    const allowDup = allowDupCheckbox.checked;
+    let candidates = deck.cards;
+
+    if (!allowDup) {
+      let usedSet = usedCardsByDeck[deckKey];
+      if (!usedSet) {
+        usedSet = usedCardsByDeck[deckKey] = new Set();
+      }
+
+      let available = deck.cards.filter(c => !usedSet.has(c));
+      if (available.length === 0) {
+        const reset = confirm('此牌組所有卡片都已抽完，要重新洗牌嗎？');
+        if (!reset) {
+          spinning = false;
+          $("#btnDraw").prop("disabled", false).text("開始抽卡");
+          return;
+        }
+        usedSet.clear();
+        available = deck.cards.slice();
+      }
+      candidates = available;
+    }
+
     let totalTime = parseFloat($("#spinDuration").val()) || 2;
     if (totalTime < 0.5) totalTime = 0.5;
     totalTime *= 1000;
@@ -494,7 +650,7 @@
       const currentSpeed = maxSpeed + (minSpeed - maxSpeed) * ease;
 
       if (now - lastFrame >= currentSpeed) {
-        showCard(deckKey, randomPick(deck.cards));
+        showCard(deckKey, randomPick(candidates));
         playSlotTick();
         lastFrame = now;
       }
@@ -503,9 +659,15 @@
         requestAnimationFrame(spinFrame);
       } else {
         // 轉完 → 最終結果
-        const finalCard = randomPick(deck.cards);
+        const finalCard = randomPick(candidates);
         showCard(deckKey, finalCard);
         addHistory(deckKey, finalCard);
+
+        if (!allowDup) {
+          let usedSet = usedCardsByDeck[deckKey];
+          if (!usedSet) usedSet = usedCardsByDeck[deckKey] = new Set();
+          usedSet.add(finalCard);
+        }
 
         setTimeout(() => playFinalStop(), 120);
 
@@ -521,9 +683,12 @@
   // 初始化
   // ============================
   $(function () {
-    loadDecksFromJson();          // 從 JSON 載入牌組
+    loadPreferencesFromLocalStorage();   // 還原 localStorage 設定
+    loadDecksFromJson();                // 從 JSON 載入牌組
+
     $("#btnDraw").on("click", startSpin);
     $("#btnTestSound").on("click", testSound);
+    $("#deckSelect").on("change", savePreferences);
   });
 </script>
 
